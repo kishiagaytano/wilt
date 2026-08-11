@@ -1,147 +1,157 @@
-# FlyRank ML Internship — Starter Repo
+# Wilt
 
-**Applied Search Intelligence: Google Search Ranking & Discoverability**
+**Ranking web pages by how far their click-through rate falls below what their search position predicts.**
 
-This is the starting point for the FlyRank ML Internship. You **clone it into your own public
-repo** (one click — *Use this template*), build everything there, and submit that repo URL on
-each assignment in your portal — it's your workspace, your submission, and your portfolio all
-at once. The rhythm is simple: do the work, commit it, submit on the card. Done.
+A page can rank well and still lose clicks. Wilt scores every page against the click rate actually observed for pages at its search position, then ranks the shortfalls. The output is a review queue with reason codes: which pages a content editor should open first when rewriting titles and meta descriptions, given they can review a few dozen per sprint. It is decision-support — it orders scarce attention. It does not decide anything, and it makes no claim that editing a page causes clicks to return.
 
-Everything here runs on a small **anonymized** slice of real FlyRank search data. No credentials,
-no private client data, no setup headaches.
-
-> **New here?** Two reads: **[SETUP.md](SETUP.md)** (GitHub, Colab, and data access — ten
-> minutes, with every silent pitfall flagged), then **[GUIDE.md](GUIDE.md)** (every file
-> explained, what to edit vs. leave alone, and where your own work goes — five minutes).
+Built on an anonymized slice of real search-performance data from the FlyRank ML internship. Work in progress — see [Current status](#current-status).
 
 ---
 
-## Quickstart — first win in 2 minutes
+## Why this problem matters
 
-The fastest path is Google Colab (one click, zero install). Open Notebook 1 and run all cells:
+A content team has thousands of published pages and capacity to review a few dozen. The question is not *"which pages are bad"* — it is *"which pages should a person open first."* Get that ordering wrong and the cost lands in two places:
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/kishiagaytano/wilt/blob/main/notebooks/01_first_look_and_discovery.ipynb?flush_cache=true)
- **Week 1 — Run it, then discover a real truth yourself**
+- **A false positive costs editor hours.** Someone rewrites a title that was already fine, chasing a gap that was measurement noise. This is the expensive error, because it happens at the top of the queue where the scarce attention goes.
+- **A false negative costs unrealised clicks.** A page that genuinely under-captures stays unfixed. Cheaper per instance, and invisible — nobody notices what the queue left out.
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/kishiagaytano/wilt/blob/main/notebooks/02_your_first_readable_model.ipynb?flush_cache=true)
- **Week 2 — The model is just a rule you can read**
+The errors are asymmetric, so the work optimises for precision at the top of the list and accepts lower recall.
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/kishiagaytano/wilt/blob/main/notebooks/03_working_with_the_full_release.ipynb?flush_cache=true)
- **Weeks 3+ — The full release (~79M rows) via DuckDB, no download needed** — hosted at
- [`FlyRank/internship-warehouse`](https://huggingface.co/datasets/FlyRank/internship-warehouse) (gated: request access + accept the data-use terms, approval is instant)
+The obvious rule — flag anything below a fixed CTR threshold — fails on this data. Measured on the starter slice at a 1,000-impression floor, `ctr < 0.5%` at positions 1–20 flags **59.6%** of eligible pages. A queue containing most of the inventory does not order anything. It fails because expected CTR depends on position: the observed rate spans roughly **14×** from the top-3 stratum to the deep stratum. One flat cutoff is simultaneously too lenient at the top of the results and impossible to meet at the bottom.
 
----
-
-## Your assignment notebooks — open, fill, save, done
-
-Every assignment is one pre-named skeleton notebook in `work/notebooks/`. Click its badge,
-fill the sections in order, then **File → Save a copy in GitHub → OK** — the dialog is
-already pre-filled with your repo and the right path.
-
-> **The badges know whose repo they're in.** About 30 seconds after you create your copy, an
-> automatic commit ("Point Colab badges at this copy") rewires every badge in it to open
-> **your** notebooks — with your saved work — instead of the shared read-only ones. Reading
-> this on the shared starter page? The badges below open blank previews; make your copy
-> first ([SETUP.md](SETUP.md), Moment 1).
-
-| Week | Card | Notebook | Open |
-|---|---|---|---|
-| 1 | ML-02 | `w01_research_question` | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/kishiagaytano/wilt/blob/main/work/notebooks/w01_research_question.ipynb?flush_cache=true) |
-| 2 | ML-03 | `w02_ml_task_framing` | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/kishiagaytano/wilt/blob/main/work/notebooks/w02_ml_task_framing.ipynb?flush_cache=true) |
-| 3 | ML-04 | `w03_data_contract` | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/kishiagaytano/wilt/blob/main/work/notebooks/w03_data_contract.ipynb?flush_cache=true) |
-| 3 | ML-05 | `w03_feature_leakage_check` | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/kishiagaytano/wilt/blob/main/work/notebooks/w03_feature_leakage_check.ipynb?flush_cache=true) |
-| 4 | ML-06 | `w04_signal_audit` | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/kishiagaytano/wilt/blob/main/work/notebooks/w04_signal_audit.ipynb?flush_cache=true) |
-| 4 | ML-07 | `w04_baseline_score` | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/kishiagaytano/wilt/blob/main/work/notebooks/w04_baseline_score.ipynb?flush_cache=true) |
-| 5 | ML-08 | `w05_model` | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/kishiagaytano/wilt/blob/main/work/notebooks/w05_model.ipynb?flush_cache=true) |
-| 6 | ML-09 | `w06_validation_audit` | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/kishiagaytano/wilt/blob/main/work/notebooks/w06_validation_audit.ipynb?flush_cache=true) |
-| 7 | ML-10 | `w07_action_playbook` | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/kishiagaytano/wilt/blob/main/work/notebooks/w07_action_playbook.ipynb?flush_cache=true) |
-| 8 | ML-11 | `capstone` | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/kishiagaytano/wilt/blob/main/work/notebooks/capstone.ipynb?flush_cache=true) |
-
-Badges not opening *your* copy? Colab's built-in opener always works: **File → Open notebook
-→ GitHub tab** → paste `github.com/you/your-repo` → pick the notebook.
-
-### Prefer local?
-
-```bash
-git clone <this-repo-url>
-cd wilt
-pip install -r requirements.txt          # or: uv pip install -r requirements.txt
-python scripts/run_all.py
-```
-
-That runs the whole pipeline on the bundled sample and writes results to `outputs/`.
+Position alone does not solve it either. Position tier explains about **7%** of the variance in per-page CTR; roughly **93%** of the spread sits *within* tiers. That within-tier spread is what this project ranks.
 
 ---
 
-## What you get
+## Data
+
+**In use today — the anonymized starter slice** (`data/raw/content_refresh_anonymized.csv`):
+
+| Property | Value |
+|---|---|
+| Grain | one row per pseudonymized content item |
+| Size | 30,000 rows × 44 columns |
+| Clients | 32 pseudonymized |
+| Window | one trailing 90-day window, aggregated |
+
+It contains observed search and engagement measurements, content metadata, and transparent derived buckets. It contains no client names, domains, URLs, page titles, keywords, or raw queries. Identifiers are pseudonyms used for grouping and splitting only — never as features. FlyRank's own product decision flags and scores are deliberately absent from the release, so nothing here can learn the product's existing answer.
+
+**Not yet used — the warehouse release** (`FlyRank/internship-warehouse`, gated). ~79M daily rows across `dim_clients`, `dim_content`, `fact_content_daily_performance`, and `fact_content_query_90d`, covering **2025-01-27 → 2026-06-30**. Required for two things this project needs and the starter slice cannot provide: rebuilding the position→CTR curve at scale, and forward-window validation. *In progress — no warehouse data has been read yet.*
+
+**Exclusions, and why:**
+
+- **`avg_position == 0` rows are dropped (1,205).** Zero means "no position data," not "ranked first." Keeping them would treat a missing measurement as the best possible rank.
+- **A minimum-impressions floor is applied.** At a 500-impression floor the median page has 5 clicks and half have 5 or fewer, so per-page CTR is dominated by small-count variation. The exact floor is a policy choice being decided in ML-04, with the trade-off written down: a higher floor buys cleaner measurement and costs coverage.
+- **`ctr` and `clicks_90d` are excluded as model features.** They are the components of the target itself. `impressions_90d` and `avg_position` remain legal — they are exposure and context, not outcome.
+- **`trend_pct` and `trend_direction` are unused.** They are the label source for the reference pipeline's task, not this one.
+
+Full column reference: [`docs/data-dictionary.md`](docs/data-dictionary.md). Handling rules: [`DATA_USE.md`](DATA_USE.md).
+
+> One scale note that causes most misreadings of this data: rate columns are ×100 percentages. `ctr = 0.76` means 0.76%, not 76%.
+
+---
+
+## Method
+
+Designed from the framing in [`w01`](work/notebooks/w01_research_question.ipynb) and [`w02`](work/notebooks/w02_ml_task_framing.ipynb). **Not yet built** — status per item below.
+
+**Task type: ranking, not classification.** No column in this data records whether a page was reviewed or fixed. To classify, I would first have to invent a binary label and then train a model to reproduce it — a circular result that measures only how well a model copies my own rule.
+
+**Target — a derived score, stated as such.** The inputs are observed: clicks and impressions are counted, position is measured. The expectation is estimated from the same observations — the impression-weighted click rate of every page in the same position stratum. The score is the shortfall against that expectation. It is a proxy I define, not an observed outcome, and it is labelled that way wherever it appears.
+
+**Estimator: impression-weighted, not mean-of-ratios.** Averaging per-page CTR inverts the position ordering on this data — the top-3 stratum comes out *below* page-1, which is not credible. Weighting by impressions restores an ordering consistent with position. Mean-of-ratios over-weights tiny denominators, which is the same small-count problem that makes a volume floor necessary. *Measured; see `w01`.*
+
+**Shrinkage.** A page with 1,000 impressions and zero clicks and a page with 50,000 impressions and zero clicks in the same stratum produce the same raw gap and must not receive the same score. Each estimate is shrunk toward its stratum rate in proportion to how thin its evidence is. *Designed — in progress (ML-07).*
+
+**Validation: client-grouped holdout, not a random split.** Pages from one client share templates, topics, and site-wide characteristics. A random row split lets the same client appear in train and test, so a model can score well by recognising the client rather than by generalising. Whole clients are held out instead, which asks the question that matters: does this work on a client never seen before?
+
+The size of that effect is measured rather than assumed. In [`notebooks/02`](notebooks/02_your_first_readable_model.ipynb) I re-ran a top-50 comparison across five client-holdout splits: the same method swung **0.44–0.68** depending only on which clients landed in the holdout — a wider spread than the gap between the two methods being compared. Single-split results on this data are not measurements. Everything gets reported as a range across repeated grouped splits.
+
+**Leakage checks.** *Designed — in progress (ML-04, ML-05).* The list to verify: target components excluded from features; feature window never overlapping the target window; no rebuilt product flag entering as a feature; no derived field secretly encoding the target. The warehouse adds one specific trap — `fact_content_query_90d` covers a window that overlaps recent months, so for a label defined on the final month only the `*_prev30` columns are safe.
+
+**Metric.** Precision@50 against a *forward-observed* outcome: of the top 50 pages flagged, how many show their click rate moving toward their stratum's expected rate over the following 30 days. K=50 because that is roughly a sprint of editor capacity. Supported by two checks — top-50 overlap across splits (an unstable queue is not actionable), and a hand review of the top 20. *Requires warehouse access — in progress (ML-09).*
+
+### Results
+
+<!-- PLACEHOLDER — my own model results go here once ML-07 through ML-09 are complete. -->
+
+**No model of my own has been trained yet.** This section is intentionally empty rather than filled with the reference pipeline's numbers. Any figures published here will be my own, measured under the validation design above, reported as ranges across grouped splits.
+
+---
+
+## Current status
+
+**Week 3. ML-04 (data contract) is next.**
+
+Done:
+
+- **ML-02 — research question and lane.** Lane chosen against measured evidence rather than descriptions, with three rejected alternatives and the numbers behind each. [`w01`](work/notebooks/w01_research_question.ipynb)
+- **ML-03 — task framing.** Task type, target definition, success metric, unit of analysis, and why a fixed rule fails here. [`w02`](work/notebooks/w02_ml_task_framing.ipynb)
+- **Exploratory work on the starter slice.** The position→CTR curve and the estimator bias, the click-count noise profile, the structural missingness of keyword data by content type, and the five-split instability result. [`notebooks/01`](notebooks/01_first_look_and_discovery.ipynb), [`notebooks/02`](notebooks/02_your_first_readable_model.ipynb)
+- **Reference pipeline run end to end** for comparison, unmodified.
+
+In progress / not started:
+
+| Step | Status |
+|---|---|
+| ML-04 — data contract, volume floor decided and defended | Next |
+| ML-05 — leakage audit | Not started |
+| ML-06 — signal audit | Not started |
+| ML-07 — expected-CTR baseline + shrinkage | Not started |
+| ML-08 — model | Not started |
+| ML-09 — validation, forward-window check | Not started |
+| ML-10 — action playbook, reason codes | Not started |
+| ML-11 — capstone write-up and paper | Not started |
+| Warehouse access and the ~79M-row workflow | Not started |
+
+---
+
+## Repo structure
 
 | Path | What it is |
 |---|---|
-| `notebooks/` | Week 1–2 **first-win notebooks** (Colab-ready). Start here. |
-| `scripts/01–05` + `run_all.py` | The runnable reference pipeline: prepare → baseline → train → evaluate → PDF. |
-| `data/raw/content_refresh_anonymized.csv` | The anonymized starter dataset (~30k pages). |
-| `outputs/` | Example outputs so you can see the **target shape** (`model_report.md`, `refresh_queue_sample.csv`, `charts/`). |
-| `work/` | **Your space.** Lane experiments and your capstone live here — see `work/README.md`. |
-| `docs/` | The core docs + the data dictionary (see below). |
-
-### Read these (in `docs/`)
-
-1. **`ml-core-foundation-framework.md`** — the first-principles map of ML as a whole system. The backbone of the live sessions.
-2. **`ml-intern-dataset-and-lane-guide.md`** — how to use the data safely, the capstone workflow, and the analysis "lanes" you can pick from.
-3. **`intern-free-tooling-guide.md`** — the zero-budget tool stack (Python, Colab, free AI assistants). You never need to pay for anything.
-4. **`data-dictionary.md`** — all 44 columns: meaning, scale, and gotchas. Keep it open while you work.
+| `work/notebooks/` | My assignment notebooks. `w01`, `w02` complete; the rest are skeletons. |
+| `notebooks/01`, `notebooks/02` | Guided starter notebooks, run top to bottom, with my own experiments in the open cells. |
+| `notebooks/03` | The DuckDB + Hugging Face workflow for the full release. Not yet run. |
+| `scripts/01–05`, `run_all.py` | The reference pipeline — prepare, baseline, train, evaluate, report. Unmodified, kept as the comparison point. |
+| `data/raw/` | The anonymized starter CSV. The only dataset in this repo. |
+| `outputs/` | Reference pipeline artifacts. **Not my results.** |
+| `docs/` | Data dictionary, lane guide, framework notes. |
+| `skills/` | Instruction library for AI assistants working in this repo. |
 
 ---
 
-## The pipeline (what `run_all.py` does)
+## Reproducibility
 
-```text
-01_prepare_features.py   clean + build the feature vector, define the label
-02_baseline_score.py     a transparent hand-rule "fix this first" score
-03_train_model.py        logistic regression, decision tree, random forest (client-holdout split)
-04_evaluate_and_export.py  ranked queue + charts + Markdown report
-05_build_pdf_report.py   a shareable PDF summary
+The starter CSV ships with the repo. No credentials are needed for anything currently in it.
+
+```bash
+git clone https://github.com/kishiagaytano/wilt
+cd wilt
+pip install -r requirements.txt
+python scripts/run_all.py
 ```
 
-On the bundled sample, the learned model clearly beats the hand-written rule at picking the right
-pages to review first (**Precision@50 ≈ 0.24 → 0.74**; the model number can land 0.68–0.74
-depending on library versions — the ~3x lift is the point). The notebooks compute these numbers
-live, so they always reflect the current data and environment.
+That runs the reference pipeline on the bundled sample and writes to `outputs/`. It is the baseline this project compares against — not my method.
 
-**Teaching point:** the model is the capstone, but the *workflow* is the lesson —
-`problem framing → data cleaning → baseline → first model → evaluation → explainable recommendation`.
+The notebooks run top to bottom in Colab or a local Jupyter kernel:
 
----
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/kishiagaytano/wilt/blob/main/work/notebooks/w01_research_question.ipynb?flush_cache=true) ML-02 — research question
 
-## Data safety (read `DATA_USE.md`)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/kishiagaytano/wilt/blob/main/work/notebooks/w02_ml_task_framing.ipynb?flush_cache=true) ML-03 — task framing
 
-- Only the small **anonymized** CSV ships here — no client names, domains, URLs, titles, or keywords.
-- **Never** add raw private client data to this repo or your fork. Need more data? Request an approved
-  release from your mentor — never export it yourself.
-- Don't paste client data into third-party AI tools.
-- Frame every result as **observed / measured / directional / decision-support** — never
-  "I predicted Google's algorithm."
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/kishiagaytano/wilt/blob/main/notebooks/01_first_look_and_discovery.ipynb?flush_cache=true) Starter — first look and discovery
 
-The `.gitignore` blocks datasets by default, and CI fails any commit that includes a dataset.
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/kishiagaytano/wilt/blob/main/notebooks/02_your_first_readable_model.ipynb?flush_cache=true) Starter — readable model and leakage
+
+Seeds are fixed and noted in each notebook. Datasets never enter git; CI fails any commit containing one.
+
+Work on the full warehouse release requires gated access to `FlyRank/internship-warehouse` and a read token supplied via environment variable or Colab Secrets — never committed.
 
 ---
 
-## Assignments & schedule
+## Acknowledgments
 
-Weekly assignments, live events, and the capstone live on **your portal board** (your
-enrollment email has your access link). This repo is the shared technical foundation they all
-build on — and the `skills/` folder here is the instruction library for your AI assistant
-(start at [skills/README.md](skills/README.md)).
+Built on the FlyRank ML Internship dataset — [flyrank.ai](https://flyrank.ai).
 
-**First time with GitHub?** You need exactly four things (full walkthrough: [SETUP.md](SETUP.md)):
-1. A free account at github.com.
-2. Your own copy of this repo: **Use this template → Create a new repository** → public.
-   (One click — brings the notebooks, `work/`, and the CI leak-guard with it.)
-3. In Colab: *File → Save a copy in GitHub* — opened from your copy's badges, the dialog is
-   already pre-filled with your repo and path, so it's just OK (Colab handles auth).
-4. That's your submission repo — share its **github.com/you/your-repo** URL with Assignment 1
-   (never a colab.research.google.com or drive.google.com link).
-
----
-
-*Track leads: Mirza Ašćerić (ML) · Hole (data engineering). Code under MIT (see `LICENSE`); data under `DATA_USE.md`.*
+Code is MIT licensed (see [`LICENSE`](LICENSE)). The data is governed by [`DATA_USE.md`](DATA_USE.md) and is not redistributable beyond the anonymized slice included here.
