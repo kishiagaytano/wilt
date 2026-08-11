@@ -64,7 +64,7 @@ Badges not opening *your* copy? Colab's built-in opener always works: **File →
 
 ```bash
 git clone <this-repo-url>
-cd flyrank-ml-internship-starter
+cd wilt
 pip install -r requirements.txt          # or: uv pip install -r requirements.txt
 python scripts/run_all.py
 ```
