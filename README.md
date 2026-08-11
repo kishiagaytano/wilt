@@ -19,7 +19,9 @@ The errors are asymmetric, so the work optimises for precision at the top of the
 
 The obvious rule — flag anything below a fixed CTR threshold — fails on this data. Measured on the starter slice at a 1,000-impression floor, `ctr < 0.5%` at positions 1–20 flags **59.6%** of eligible pages. A queue containing most of the inventory does not order anything. It fails because expected CTR depends on position: the observed rate spans roughly **14×** from the top-3 stratum to the deep stratum. One flat cutoff is simultaneously too lenient at the top of the results and impossible to meet at the bottom.
 
-Position alone does not solve it either. Position tier explains about **7%** of the variance in per-page CTR; roughly **93%** of the spread sits *within* tiers. That within-tier spread is what this project ranks.
+Position alone does not solve it either. Position tier explains about **7%** of the variance in per-page CTR on this slice; roughly **93%** of the spread sits *within* tiers. That within-tier spread is what this project ranks.
+
+That 7% is the most provisional number here, and worth naming as such. `avg_position` in the starter slice is a 90-day mean, so a page that moved between positions is compared against a blended expectation. The warehouse has daily position, which will likely explain more of the spread than a 90-day average does. Re-deriving it there is part of the capstone. The lane holds as long as material within-position residual remains — which the 14× spread makes likely — but the specific figure should be expected to move.
 
 ---
 
@@ -36,12 +38,21 @@ Position alone does not solve it either. Position tier explains about **7%** of 
 
 It contains observed search and engagement measurements, content metadata, and transparent derived buckets. It contains no client names, domains, URLs, page titles, keywords, or raw queries. Identifiers are pseudonyms used for grouping and splitting only — never as features. FlyRank's own product decision flags and scores are deliberately absent from the release, so nothing here can learn the product's existing answer.
 
-**Not yet used — the warehouse release** (`FlyRank/internship-warehouse`, gated). ~79M daily rows across `dim_clients`, `dim_content`, `fact_content_daily_performance`, and `fact_content_query_90d`, covering **2025-01-27 → 2026-06-30**. Required for two things this project needs and the starter slice cannot provide: rebuilding the position→CTR curve at scale, and forward-window validation. *In progress — no warehouse data has been read yet.*
+**Not yet used — the warehouse release** (`FlyRank/internship-warehouse`, gated). ~79M daily rows across `dim_clients`, `dim_content`, `fact_content_daily_performance`, and `fact_content_query_90d`, covering **2025-01-27 → 2026-06-30**. Four things it provides that the starter slice cannot:
 
-**Exclusions, and why:**
+- **Daily position**, instead of a 90-day mean — so expected CTR can be conditioned on the position a page actually held when the impressions were served.
+- **Query mix** from `fact_content_query_90d` — how many distinct queries a page earns impressions across, and how concentrated they are. A page ranking for forty queries has a blended position by construction, and its expectation should account for that.
+- **Forward windows**, which make the validation metric below computable at all.
+- **More clients** for grouped validation — roughly 70 with usable history against 32 here.
+
+*In progress — no warehouse data has been read yet.*
+
+Absolute CTR levels differ between the two. Aggregate CTR on the starter slice runs around 0.31%, while [`docs/data-dictionary.md`](docs/data-dictionary.md) cites ≈2.78% for positions 1–3 at warehouse scale. Every claim below relies on the *shape* of the position→CTR relationship, not its level. Level claims get re-derived on the warehouse before they are published.
+
+**Exclusions defined for this lane** — applied in the analysis notebooks, formalised as a data contract in ML-04:
 
 - **`avg_position == 0` rows are dropped (1,205).** Zero means "no position data," not "ranked first." Keeping them would treat a missing measurement as the best possible rank.
-- **A minimum-impressions floor is applied.** At a 500-impression floor the median page has 5 clicks and half have 5 or fewer, so per-page CTR is dominated by small-count variation. The exact floor is a policy choice being decided in ML-04, with the trade-off written down: a higher floor buys cleaner measurement and costs coverage.
+- **A minimum-impressions floor.** At a 500-impression floor the median page has 5 clicks and half have 5 or fewer, so per-page CTR is dominated by small-count variation. The exact floor is an open policy choice, with the trade-off to be written down: a higher floor buys cleaner measurement and costs coverage.
 - **`ctr` and `clicks_90d` are excluded as model features.** They are the components of the target itself. `impressions_90d` and `avg_position` remain legal — they are exposure and context, not outcome.
 - **`trend_pct` and `trend_direction` are unused.** They are the label source for the reference pipeline's task, not this one.
 
@@ -59,13 +70,15 @@ Designed from the framing in [`w01`](work/notebooks/w01_research_question.ipynb)
 
 **Target — a derived score, stated as such.** The inputs are observed: clicks and impressions are counted, position is measured. The expectation is estimated from the same observations — the impression-weighted click rate of every page in the same position stratum. The score is the shortfall against that expectation. It is a proxy I define, not an observed outcome, and it is labelled that way wherever it appears.
 
-**Estimator: impression-weighted, not mean-of-ratios.** Averaging per-page CTR inverts the position ordering on this data — the top-3 stratum comes out *below* page-1, which is not credible. Weighting by impressions restores an ordering consistent with position. Mean-of-ratios over-weights tiny denominators, which is the same small-count problem that makes a volume floor necessary. *Measured; see `w01`.*
+**Estimator: impression-weighted, not mean-of-ratios.** These are different estimands, not two estimates of the same quantity: averaging per-page CTR weights every page equally regardless of denominator, while pooling clicks over impressions weights by exposure. They diverge whenever denominators vary within a stratum — a structural property of search data, so more data makes each estimate more precise without making them converge.
+
+On this slice the divergence is stark enough to flip the ordering: mean-of-ratios puts the top-3 stratum *below* page-1, which is not credible. Impression-weighting restores the expected top-to-bottom shape. That specific inversion depends on stratum composition and may not reproduce at warehouse scale; the divergence itself will, because it is arithmetic. Adjacent middle strata sit within 0.004pp of each other at some floors, so the fine-grained ordering is not stable either way — the gross shape is what I rely on. *Measured; see `w01`.*
 
 **Shrinkage.** A page with 1,000 impressions and zero clicks and a page with 50,000 impressions and zero clicks in the same stratum produce the same raw gap and must not receive the same score. Each estimate is shrunk toward its stratum rate in proportion to how thin its evidence is. *Designed — in progress (ML-07).*
 
 **Validation: client-grouped holdout, not a random split.** Pages from one client share templates, topics, and site-wide characteristics. A random row split lets the same client appear in train and test, so a model can score well by recognising the client rather than by generalising. Whole clients are held out instead, which asks the question that matters: does this work on a client never seen before?
 
-The size of that effect is measured rather than assumed. In [`notebooks/02`](notebooks/02_your_first_readable_model.ipynb) I re-ran a top-50 comparison across five client-holdout splits: the same method swung **0.44–0.68** depending only on which clients landed in the holdout — a wider spread than the gap between the two methods being compared. Single-split results on this data are not measurements. Everything gets reported as a range across repeated grouped splits.
+The size of that effect is measured rather than assumed. In [`notebooks/02`](notebooks/02_your_first_readable_model.ipynb) I re-ran a top-50 comparison across five client-holdout splits: the same method swung **0.44–0.68** depending only on which clients landed in the holdout — a wider spread than the gap between the two methods being compared. That experiment used the starter pipeline's declining-page label rather than this lane's target, so it is evidence about how much client composition moves a top-K result on this data, not a result about my own method. It is enough to establish that single-split numbers here are not measurements. Everything gets reported as a range across repeated grouped splits.
 
 **Leakage checks.** *Designed — in progress (ML-04, ML-05).* The list to verify: target components excluded from features; feature window never overlapping the target window; no rebuilt product flag entering as a feature; no derived field secretly encoding the target. The warehouse adds one specific trap — `fact_content_query_90d` covers a window that overlaps recent months, so for a label defined on the final month only the `*_prev30` columns are safe.
 
