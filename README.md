@@ -2,32 +2,32 @@
 
 **Ranking web pages by how far their click-through rate falls below what their search position predicts.**
 
-A page can rank well and still lose clicks. Wilt scores every page against the click rate actually observed for pages at its search position, then ranks the shortfalls. The output is a review queue with reason codes: which pages a content editor should open first when rewriting titles and meta descriptions, given they can review a few dozen per sprint. It is decision-support — it orders scarce attention. It does not decide anything, and it makes no claim that editing a page causes clicks to return.
+A page can rank well and still lose clicks. Wilt scores every page against the click rate actually observed for pages at its search position, then ranks the shortfalls. The output is a review queue with reason codes: which pages a content editor should open first when rewriting titles and meta descriptions, given they can review a few dozen per sprint. It is decision-support. It orders scarce attention, it does not decide anything, and it makes no claim that editing a page causes clicks to return.
 
-Built on an anonymized slice of real search-performance data from the FlyRank ML internship. Work in progress — see [Current status](#current-status).
+Built on an anonymized slice of real search-performance data from the FlyRank ML internship. Work in progress; see [Current status](#current-status).
 
 ---
 
 ## Why this problem matters
 
-A content team has thousands of published pages and capacity to review a few dozen. The question is not *"which pages are bad"* — it is *"which pages should a person open first."* Get that ordering wrong and the cost lands in two places:
+A content team has thousands of published pages and capacity to review a few dozen. The question is not *"which pages are bad"*. It is *"which pages should a person open first."* Get that ordering wrong and the cost lands in two places:
 
 - **A false positive costs editor hours.** Someone rewrites a title that was already fine, chasing a gap that was measurement noise. This is the expensive error, because it happens at the top of the queue where the scarce attention goes.
-- **A false negative costs unrealised clicks.** A page that genuinely under-captures stays unfixed. Cheaper per instance, and invisible — nobody notices what the queue left out.
+- **A false negative costs unrealised clicks.** A page that genuinely under-captures stays unfixed. Cheaper per instance, and invisible, since nobody notices what the queue left out.
 
 The errors are asymmetric, so the work optimises for precision at the top of the list and accepts lower recall.
 
-The obvious rule — flag anything below a fixed CTR threshold — fails on this data. Measured on the starter slice at a 1,000-impression floor, `ctr < 0.5%` at positions 1–20 flags **59.6%** of eligible pages. A queue containing most of the inventory does not order anything. It fails because expected CTR depends on position: the observed rate spans roughly **14×** from the top-3 stratum to the deep stratum. One flat cutoff is simultaneously too lenient at the top of the results and impossible to meet at the bottom.
+The obvious rule, flagging anything below a fixed CTR threshold, fails on this data. Measured on the starter slice at a 1,000-impression floor, `ctr < 0.5%` at positions 1–20 flags **59.6%** of eligible pages. A queue containing most of the inventory does not order anything. It fails because expected CTR depends on position: the observed rate spans roughly **14×** from the top-3 stratum to the deep stratum. One flat cutoff is simultaneously too lenient at the top of the results and impossible to meet at the bottom.
 
 Position alone does not solve it either. Position tier explains about **7%** of the variance in per-page CTR on this slice; roughly **93%** of the spread sits *within* tiers. That within-tier spread is what this project ranks.
 
-That 7% is the most provisional number here, and worth naming as such. `avg_position` in the starter slice is a 90-day mean, so a page that moved between positions is compared against a blended expectation. The warehouse has daily position, which will likely explain more of the spread than a 90-day average does. Re-deriving it there is part of the capstone. The lane holds as long as material within-position residual remains — which the 14× spread makes likely — but the specific figure should be expected to move.
+That 7% is the most provisional number here, and worth naming as such. `avg_position` in the starter slice is a 90-day mean, so a page that moved between positions is compared against a blended expectation. The warehouse has daily position, which will likely explain more of the spread than a 90-day average does. Re-deriving it there is part of the capstone. The lane holds as long as material within-position residual remains, which the 14× spread makes likely, but the specific figure should be expected to move.
 
 ---
 
 ## Data
 
-**In use today — the anonymized starter slice** (`data/raw/content_refresh_anonymized.csv`):
+**In use today: the anonymized starter slice** (`data/raw/content_refresh_anonymized.csv`):
 
 | Property | Value |
 |---|---|
@@ -36,24 +36,24 @@ That 7% is the most provisional number here, and worth naming as such. `avg_posi
 | Clients | 32 pseudonymized |
 | Window | one trailing 90-day window, aggregated |
 
-It contains observed search and engagement measurements, content metadata, and transparent derived buckets. It contains no client names, domains, URLs, page titles, keywords, or raw queries. Identifiers are pseudonyms used for grouping and splitting only — never as features. FlyRank's own product decision flags and scores are deliberately absent from the release, so nothing here can learn the product's existing answer.
+It contains observed search and engagement measurements, content metadata, and transparent derived buckets. It contains no client names, domains, URLs, page titles, keywords, or raw queries. Identifiers are pseudonyms used for grouping and splitting only, never as features. FlyRank's own product decision flags and scores are deliberately absent from the release, so nothing here can learn the product's existing answer.
 
-**Not yet used — the warehouse release** (`FlyRank/internship-warehouse`, gated). ~79M daily rows across `dim_clients`, `dim_content`, `fact_content_daily_performance`, and `fact_content_query_90d`, covering **2025-01-27 → 2026-06-30**. Four things it provides that the starter slice cannot:
+**Not yet used: the warehouse release** (`FlyRank/internship-warehouse`, gated). ~79M daily rows across `dim_clients`, `dim_content`, `fact_content_daily_performance`, and `fact_content_query_90d`, covering **2025-01-27 → 2026-06-30**. Four things it provides that the starter slice cannot:
 
-- **Daily position**, instead of a 90-day mean — so expected CTR can be conditioned on the position a page actually held when the impressions were served.
-- **Query mix** from `fact_content_query_90d` — how many distinct queries a page earns impressions across, and how concentrated they are. A page ranking for forty queries has a blended position by construction, and its expectation should account for that.
+- **Daily position**, instead of a 90-day mean, so expected CTR can be conditioned on the position a page actually held when the impressions were served.
+- **Query mix** from `fact_content_query_90d`: how many distinct queries a page earns impressions across, and how concentrated they are. A page ranking for forty queries has a blended position by construction, and its expectation should account for that.
 - **Forward windows**, which make the validation metric below computable at all.
-- **More clients** for grouped validation — roughly 70 with usable history against 32 here.
+- **More clients** for grouped validation, roughly 70 with usable history against 32 here.
 
-*In progress — no warehouse data has been read yet.*
+*In progress. No warehouse data has been read yet.*
 
 Absolute CTR levels differ between the two. Aggregate CTR on the starter slice runs around 0.31%, while [`docs/data-dictionary.md`](docs/data-dictionary.md) cites ≈2.78% for positions 1–3 at warehouse scale. Every claim below relies on the *shape* of the position→CTR relationship, not its level. Level claims get re-derived on the warehouse before they are published.
 
-**Exclusions defined for this lane** — applied in the analysis notebooks, formalised as a data contract in ML-04:
+**Exclusions defined for this lane**, applied in the analysis notebooks and formalised as a data contract in ML-04:
 
 - **`avg_position == 0` rows are dropped (1,205).** Zero means "no position data," not "ranked first." Keeping them would treat a missing measurement as the best possible rank.
 - **A minimum-impressions floor.** At a 500-impression floor the median page has 5 clicks and half have 5 or fewer, so per-page CTR is dominated by small-count variation. The exact floor is an open policy choice, with the trade-off to be written down: a higher floor buys cleaner measurement and costs coverage.
-- **`ctr` and `clicks_90d` are excluded as model features.** They are the components of the target itself. `impressions_90d` and `avg_position` remain legal — they are exposure and context, not outcome.
+- **`ctr` and `clicks_90d` are excluded as model features.** They are the components of the target itself. `impressions_90d` and `avg_position` remain legal, as exposure and context rather than outcome.
 - **`trend_pct` and `trend_direction` are unused.** They are the label source for the reference pipeline's task, not this one.
 
 Full column reference: [`docs/data-dictionary.md`](docs/data-dictionary.md). Handling rules: [`DATA_USE.md`](DATA_USE.md).
@@ -64,29 +64,29 @@ Full column reference: [`docs/data-dictionary.md`](docs/data-dictionary.md). Han
 
 ## Method
 
-Designed from the framing in [`w01`](work/notebooks/w01_research_question.ipynb) and [`w02`](work/notebooks/w02_ml_task_framing.ipynb). **Not yet built** — status per item below.
+Designed from the framing in [`w01`](work/notebooks/w01_research_question.ipynb) and [`w02`](work/notebooks/w02_ml_task_framing.ipynb). **Not yet built.** Status is noted per item.
 
-**Task type: ranking, not classification.** No column in this data records whether a page was reviewed or fixed. To classify, I would first have to invent a binary label and then train a model to reproduce it — a circular result that measures only how well a model copies my own rule.
+**Task type: ranking, not classification.** No column in this data records whether a page was reviewed or fixed. To classify, I would first have to invent a binary label and then train a model to reproduce it. That is a circular result, measuring only how well a model copies my own rule.
 
-**Target — a derived score, stated as such.** The inputs are observed: clicks and impressions are counted, position is measured. The expectation is estimated from the same observations — the impression-weighted click rate of every page in the same position stratum. The score is the shortfall against that expectation. It is a proxy I define, not an observed outcome, and it is labelled that way wherever it appears.
+**Target: a derived score, stated as such.** The inputs are observed. Clicks and impressions are counted, position is measured. The expectation is estimated from those same observations, as the impression-weighted click rate of every page in the same position stratum. The score is the shortfall against that expectation. It is a proxy I define, not an observed outcome, and it is labelled that way wherever it appears.
 
-**Estimator: impression-weighted, not mean-of-ratios.** These are different estimands, not two estimates of the same quantity: averaging per-page CTR weights every page equally regardless of denominator, while pooling clicks over impressions weights by exposure. They diverge whenever denominators vary within a stratum — a structural property of search data, so more data makes each estimate more precise without making them converge.
+**Estimator: impression-weighted, not mean-of-ratios.** These are different estimands, not two estimates of the same quantity. Averaging per-page CTR weights every page equally regardless of denominator, while pooling clicks over impressions weights by exposure. They diverge whenever denominators vary within a stratum, a structural property of search data, so more data makes each estimate more precise without making them converge.
 
-On this slice the divergence is stark enough to flip the ordering: mean-of-ratios puts the top-3 stratum *below* page-1, which is not credible. Impression-weighting restores the expected top-to-bottom shape. That specific inversion depends on stratum composition and may not reproduce at warehouse scale; the divergence itself will, because it is arithmetic. Adjacent middle strata sit within 0.004pp of each other at some floors, so the fine-grained ordering is not stable either way — the gross shape is what I rely on. *Measured; see `w01`.*
+On this slice the divergence is stark enough to flip the ordering: mean-of-ratios puts the top-3 stratum *below* page-1, which is not credible. Impression-weighting restores the expected top-to-bottom shape. That specific inversion depends on stratum composition and may not reproduce at warehouse scale, but the divergence itself will, because it is arithmetic. Adjacent middle strata sit within 0.004pp of each other at some floors, so the fine-grained ordering is not stable either way. The gross shape is what I rely on. *Measured; see `w01`.*
 
-**Shrinkage.** A page with 1,000 impressions and zero clicks and a page with 50,000 impressions and zero clicks in the same stratum produce the same raw gap and must not receive the same score. Each estimate is shrunk toward its stratum rate in proportion to how thin its evidence is. *Designed — in progress (ML-07).*
+**Shrinkage.** A page with 1,000 impressions and zero clicks and a page with 50,000 impressions and zero clicks in the same stratum produce the same raw gap and must not receive the same score. Each estimate is shrunk toward its stratum rate in proportion to how thin its evidence is. *Designed, in progress (ML-07).*
 
 **Validation: client-grouped holdout, not a random split.** Pages from one client share templates, topics, and site-wide characteristics. A random row split lets the same client appear in train and test, so a model can score well by recognising the client rather than by generalising. Whole clients are held out instead, which asks the question that matters: does this work on a client never seen before?
 
-The size of that effect is measured rather than assumed. In [`notebooks/02`](notebooks/02_your_first_readable_model.ipynb) I re-ran a top-50 comparison across five client-holdout splits: the same method swung **0.44–0.68** depending only on which clients landed in the holdout — a wider spread than the gap between the two methods being compared. That experiment used the starter pipeline's declining-page label rather than this lane's target, so it is evidence about how much client composition moves a top-K result on this data, not a result about my own method. It is enough to establish that single-split numbers here are not measurements. Everything gets reported as a range across repeated grouped splits.
+The size of that effect is measured rather than assumed. In [`notebooks/02`](notebooks/02_your_first_readable_model.ipynb) I re-ran a top-50 comparison across five client-holdout splits. The same method swung **0.44–0.68** depending only on which clients landed in the holdout, a wider spread than the gap between the two methods being compared. That experiment used the starter pipeline's declining-page label rather than this lane's target, so it is evidence about how much client composition moves a top-K result on this data, not a result about my own method. It is enough to establish that single-split numbers here are not measurements. Everything gets reported as a range across repeated grouped splits.
 
-**Leakage checks.** *Designed — in progress (ML-04, ML-05).* The list to verify: target components excluded from features; feature window never overlapping the target window; no rebuilt product flag entering as a feature; no derived field secretly encoding the target. The warehouse adds one specific trap — `fact_content_query_90d` covers a window that overlaps recent months, so for a label defined on the final month only the `*_prev30` columns are safe.
+**Leakage checks.** *Designed, in progress (ML-04, ML-05).* The list to verify: target components excluded from features; feature window never overlapping the target window; no rebuilt product flag entering as a feature; no derived field secretly encoding the target. The warehouse adds one specific trap. `fact_content_query_90d` covers a window that overlaps recent months, so for a label defined on the final month only the `*_prev30` columns are safe.
 
-**Metric.** Precision@50 against a *forward-observed* outcome: of the top 50 pages flagged, how many show their click rate moving toward their stratum's expected rate over the following 30 days. K=50 because that is roughly a sprint of editor capacity. Supported by two checks — top-50 overlap across splits (an unstable queue is not actionable), and a hand review of the top 20. *Requires warehouse access — in progress (ML-09).*
+**Metric.** Precision@50 against a *forward-observed* outcome: of the top 50 pages flagged, how many show their click rate moving toward their stratum's expected rate over the following 30 days. K=50 because that is roughly a sprint of editor capacity. Two checks support it: top-50 overlap across splits, since an unstable queue is not actionable, and a hand review of the top 20. *Requires warehouse access, in progress (ML-09).*
 
 ### Results
 
-<!-- PLACEHOLDER — my own model results go here once ML-07 through ML-09 are complete. -->
+<!-- PLACEHOLDER: my own model results go here once ML-07 through ML-09 are complete. -->
 
 **No model of my own has been trained yet.** This section is intentionally empty rather than filled with the reference pipeline's numbers. Any figures published here will be my own, measured under the validation design above, reported as ranges across grouped splits.
 
@@ -98,23 +98,23 @@ The size of that effect is measured rather than assumed. In [`notebooks/02`](not
 
 Done:
 
-- **ML-02 — research question and lane.** Lane chosen against measured evidence rather than descriptions, with three rejected alternatives and the numbers behind each. [`w01`](work/notebooks/w01_research_question.ipynb)
-- **ML-03 — task framing.** Task type, target definition, success metric, unit of analysis, and why a fixed rule fails here. [`w02`](work/notebooks/w02_ml_task_framing.ipynb)
+- **ML-02, research question and lane.** Lane chosen against measured evidence rather than descriptions, with three rejected alternatives and the numbers behind each. [`w01`](work/notebooks/w01_research_question.ipynb)
+- **ML-03, task framing.** Task type, target definition, success metric, unit of analysis, and why a fixed rule fails here. [`w02`](work/notebooks/w02_ml_task_framing.ipynb)
 - **Exploratory work on the starter slice.** The position→CTR curve and the estimator bias, the click-count noise profile, the structural missingness of keyword data by content type, and the five-split instability result. [`notebooks/01`](notebooks/01_first_look_and_discovery.ipynb), [`notebooks/02`](notebooks/02_your_first_readable_model.ipynb)
 - **Reference pipeline run end to end** for comparison, unmodified.
 
-In progress / not started:
+In progress and not started:
 
 | Step | Status |
 |---|---|
-| ML-04 — data contract, volume floor decided and defended | Next |
-| ML-05 — leakage audit | Not started |
-| ML-06 — signal audit | Not started |
-| ML-07 — expected-CTR baseline + shrinkage | Not started |
-| ML-08 — model | Not started |
-| ML-09 — validation, forward-window check | Not started |
-| ML-10 — action playbook, reason codes | Not started |
-| ML-11 — capstone write-up and paper | Not started |
+| ML-04, data contract with the volume floor decided and defended | Next |
+| ML-05, leakage audit | Not started |
+| ML-06, signal audit | Not started |
+| ML-07, expected-CTR baseline and shrinkage | Not started |
+| ML-08, model | Not started |
+| ML-09, validation and forward-window check | Not started |
+| ML-10, action playbook and reason codes | Not started |
+| ML-11, capstone write-up and paper | Not started |
 | Warehouse access and the ~79M-row workflow | Not started |
 
 ---
@@ -125,8 +125,8 @@ In progress / not started:
 |---|---|
 | `work/notebooks/` | My assignment notebooks. `w01`, `w02` complete; the rest are skeletons. |
 | `notebooks/01`, `notebooks/02` | Guided starter notebooks, run top to bottom, with my own experiments in the open cells. |
-| `notebooks/03` | The DuckDB + Hugging Face workflow for the full release. Not yet run. |
-| `scripts/01–05`, `run_all.py` | The reference pipeline — prepare, baseline, train, evaluate, report. Unmodified, kept as the comparison point. |
+| `notebooks/03` | The DuckDB and Hugging Face workflow for the full release. Not yet run. |
+| `scripts/01–05`, `run_all.py` | The reference pipeline: prepare, baseline, train, evaluate, report. Unmodified, kept as the comparison point. |
 | `data/raw/` | The anonymized starter CSV. The only dataset in this repo. |
 | `outputs/` | Reference pipeline artifacts. **Not my results.** |
 | `docs/` | Data dictionary, lane guide, framework notes. |
@@ -145,26 +145,26 @@ pip install -r requirements.txt
 python scripts/run_all.py
 ```
 
-That runs the reference pipeline on the bundled sample and writes to `outputs/`. It is the baseline this project compares against — not my method.
+That runs the reference pipeline on the bundled sample and writes to `outputs/`. It is the baseline this project compares against, not my method.
 
 The notebooks run top to bottom in Colab or a local Jupyter kernel:
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/kishiagaytano/wilt/blob/main/work/notebooks/w01_research_question.ipynb?flush_cache=true) ML-02 — research question
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/kishiagaytano/wilt/blob/main/work/notebooks/w01_research_question.ipynb?flush_cache=true) ML-02, research question
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/kishiagaytano/wilt/blob/main/work/notebooks/w02_ml_task_framing.ipynb?flush_cache=true) ML-03 — task framing
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/kishiagaytano/wilt/blob/main/work/notebooks/w02_ml_task_framing.ipynb?flush_cache=true) ML-03, task framing
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/kishiagaytano/wilt/blob/main/notebooks/01_first_look_and_discovery.ipynb?flush_cache=true) Starter — first look and discovery
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/kishiagaytano/wilt/blob/main/notebooks/01_first_look_and_discovery.ipynb?flush_cache=true) Starter, first look and discovery
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/kishiagaytano/wilt/blob/main/notebooks/02_your_first_readable_model.ipynb?flush_cache=true) Starter — readable model and leakage
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/kishiagaytano/wilt/blob/main/notebooks/02_your_first_readable_model.ipynb?flush_cache=true) Starter, readable model and leakage
 
 Seeds are fixed and noted in each notebook. Datasets never enter git; CI fails any commit containing one.
 
-Work on the full warehouse release requires gated access to `FlyRank/internship-warehouse` and a read token supplied via environment variable or Colab Secrets — never committed.
+Work on the full warehouse release requires gated access to `FlyRank/internship-warehouse` and a read token supplied via environment variable or Colab Secrets, never committed.
 
 ---
 
 ## Acknowledgments
 
-Built on the FlyRank ML Internship dataset — [flyrank.ai](https://flyrank.ai).
+Built on the FlyRank ML Internship dataset: [flyrank.ai](https://flyrank.ai).
 
 Code is MIT licensed (see [`LICENSE`](LICENSE)). The data is governed by [`DATA_USE.md`](DATA_USE.md) and is not redistributable beyond the anonymized slice included here.
